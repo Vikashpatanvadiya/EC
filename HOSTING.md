@@ -5,11 +5,14 @@ already inside it (server actions and API routes), and Vercel runs that.
 Render would only earn its place later for work that must outlive a
 request — background image processing, scheduled jobs. Skip it for now.
 
-| Piece                    | Where       | Free tier                        |
-| ------------------------ | ----------- | -------------------------------- |
-| Website + API            | Vercel      | Hobby — free                     |
-| Postgres database        | Neon        | Free (0.5GB, scales to zero)     |
-| Customer artwork storage | Vercel Blob | Free (1GB) — see §3              |
+| Piece                    | Where            | Free tier                    |
+| ------------------------ | ---------------- | ---------------------------- |
+| Website + API            | Vercel           | Hobby — free                 |
+| Postgres database        | Neon             | Free (0.5GB, scales to zero) |
+| Customer artwork storage | Supabase Storage | Free (1GB) — see §3          |
+
+Supabase is used **only** as a private file store here. The database is
+Neon; no Supabase database is created or used.
 
 ---
 
@@ -68,7 +71,9 @@ npx prisma migrate deploy && npm run db:seed
 | `AUTH_SECRET`               | `openssl rand -base64 32`                 |
 | `AUTH_URL`                  | `https://your-app.vercel.app`             |
 | `NEXT_PUBLIC_APP_URL`       | `https://your-app.vercel.app`             |
-| `BLOB_READ_WRITE_TOKEN`     | Added automatically by Vercel Blob (§3)   |
+| `SUPABASE_URL`              | Supabase Project URL (§3)                 |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase `service_role` key — secret (§3) |
+| `SUPABASE_STORAGE_BUCKET`   | `designs`                                 |
 | `SEED_ADMIN_EMAIL`          | Your real admin email                     |
 | `SEED_ADMIN_PASSWORD`       | A strong password you choose              |
 
@@ -91,17 +96,34 @@ must not go in the database or on disk:
   upload written to disk in production fails, and anything that did get
   written would vanish on the next deploy.
 
-So artwork needs a real object store. **Vercel Blob** is the least
-friction given you are already on Vercel: Storage tab → Create → Blob,
-and it injects `BLOB_READ_WRITE_TOKEN` into the project itself. 1GB free.
+So artwork goes to **Supabase Storage**, which supports genuinely
+private buckets — the right call when the files are customers' personal
+photographs. This is already implemented; it needs only keys.
+
+Set it up:
+
+1. supabase.com → **New project** (any region; this one stores files
+   only, so it is not latency-critical). You can ignore the database it
+   creates — the app never touches it.
+2. **Storage → New bucket → `designs`**, and leave **Public switched
+   off**.
+3. **Project Settings → API** → copy the **Project URL** and the
+   **`service_role`** key.
+
+> The `service_role` key bypasses all row-level security. It is a
+> server-only secret — never put it in a `NEXT_PUBLIC_*` variable.
+
+The app picks Supabase automatically whenever `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` are set, and falls back to local disk for
+development when they are not.
 
 `src/lib/storage.ts` is the only file that touches storage — it exposes
-`saveUpload` / `readUpload` / `deleteUpload`, and swapping the backend
-means reimplementing those three. Nothing else in the app changes.
+`saveUpload` / `readUpload` / `deleteUpload`, so changing provider later
+means reimplementing those three and nothing else.
 
-Whatever you pick, keep the bucket **private**. The app serves artwork
-only through `/api/uploads/[key]`, which checks the caller owns the order,
-holds the cart, or is an admin.
+Files stay private in transit too: artwork is served only through
+`/api/uploads/[key]`, which checks the caller owns the order, holds the
+cart, or is an admin.
 
 ---
 
@@ -123,7 +145,7 @@ holds the cart, or is an admin.
 
 1. Neon project → copy pooled + direct connection strings
 2. Put them in local `.env` → `npx prisma migrate deploy && npm run db:seed`
-3. Import the repo on Vercel → set build command → add env vars → deploy
-4. Create a Vercel Blob store (adds its own token)
+3. Supabase project → private `designs` bucket → copy URL + service_role key
+4. Import the repo on Vercel → set build command → add env vars → deploy
 5. Set `AUTH_URL` / `NEXT_PUBLIC_APP_URL` to the deployed URL → redeploy
 6. Sign in as admin and change the password
