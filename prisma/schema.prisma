@@ -1,0 +1,242 @@
+// EXQUISITE CRAFT — custom phone case shop
+//
+// Postgres locally today; the same schema runs on Supabase by pointing
+// DATABASE_URL at the Supabase connection string.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Pooled connection — serverless opens many short-lived connections,
+  // and the pooler is what stops that exhausting the database.
+  url      = env("DATABASE_URL")
+  // Unpooled, used only for migrations. Falls back to DATABASE_URL
+  // locally where the two are the same.
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------- auth
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String?
+  email        String    @unique
+  phone        String?
+  passwordHash String
+  role         Role      @default(CUSTOMER)
+  createdAt    DateTime  @default(now())
+
+  sessions  Session[]
+  carts     Cart[]
+  orders    Order[]
+  addresses Address[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Address {
+  id        String  @id @default(cuid())
+  userId    String
+  fullName  String
+  phone     String
+  line1     String
+  line2     String?
+  city      String
+  state     String
+  postcode  String
+  country   String  @default("India")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+}
+
+// ------------------------------------------------------------- catalog
+
+model Product {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  name        String
+  label       String // uppercase micro-label, e.g. "WOLF SPIRIT"
+  description String
+  /// Price in paise, to avoid floating-point money.
+  pricePaise  Int
+  image       String
+  tint        String
+  collection  String
+  tilt        Int     @default(0)
+  active      Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+}
+
+model PhoneBrand {
+  id        String  @id @default(cuid())
+  name      String  @unique
+  slug      String  @unique
+  sortOrder Int     @default(0)
+
+  models PhoneModel[]
+}
+
+model PhoneModel {
+  id         String  @id @default(cuid())
+  brandId    String
+  name       String
+  slug       String
+  /// Some models cost more to print (larger camera cut-outs, odd sizes).
+  extraPaise Int     @default(0)
+  sortOrder  Int     @default(0)
+
+  brand      PhoneBrand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@unique([brandId, slug])
+  @@index([brandId])
+}
+
+// ------------------------------------------------- customer-supplied art
+
+enum DesignKind {
+  CATALOG // an existing design, unmodified
+  UPLOAD // customer sent their own artwork
+}
+
+model DesignUpload {
+  id           String   @id @default(cuid())
+  /// Opaque filename on disk; never the customer's original name.
+  storageKey   String   @unique
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  /// Set for guest uploads so a cart can claim them after sign-in.
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+}
+
+// ---------------------------------------------------------------- cart
+
+model Cart {
+  id        String   @id @default(cuid())
+  /// Null while the shopper is a guest; set once they sign in.
+  userId    String?
+  /// Random token stored in an httpOnly cookie for guest carts.
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@index([userId])
+}
+
+model CartItem {
+  id           String     @id @default(cuid())
+  cartId       String
+  productId    String
+  phoneModelId String
+  designKind   DesignKind @default(CATALOG)
+  designId     String?
+  /// Free-text brief that goes with an upload, e.g. "put the name Aarav".
+  note         String?
+  quantity     Int        @default(1)
+  /// Price captured at add-to-cart time, so later price changes don't
+  /// silently alter what the shopper was shown.
+  unitPaise    Int
+  createdAt    DateTime   @default(now())
+
+  cart       Cart          @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product    Product       @relation(fields: [productId], references: [id])
+  phoneModel PhoneModel    @relation(fields: [phoneModelId], references: [id])
+  design     DesignUpload? @relation(fields: [designId], references: [id])
+
+  @@index([cartId])
+}
+
+// --------------------------------------------------------------- orders
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  IN_PRODUCTION
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model Order {
+  id        String      @id @default(cuid())
+  /// Short human reference shown to the customer, e.g. "EC-8F3K2D".
+  reference String      @unique
+  userId    String
+  addressId String
+  status    OrderStatus @default(PENDING_PAYMENT)
+
+  subtotalPaise Int
+  shippingPaise Int @default(0)
+  totalPaise    Int
+
+  stripeSessionId String? @unique
+  stripePaymentId String?
+
+  /// Internal note from the studio, visible only in admin.
+  adminNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User        @relation(fields: [userId], references: [id])
+  address Address     @relation(fields: [addressId], references: [id])
+  items   OrderItem[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model OrderItem {
+  id           String     @id @default(cuid())
+  orderId      String
+  productId    String
+  phoneModelId String
+  designKind   DesignKind @default(CATALOG)
+  designId     String?
+  note         String?
+  quantity     Int
+  unitPaise    Int
+
+  /// Denormalised so the order still reads correctly if a product or
+  /// model is renamed or retired later.
+  productName String
+  modelName   String
+
+  order      Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product       @relation(fields: [productId], references: [id])
+  phoneModel PhoneModel    @relation(fields: [phoneModelId], references: [id])
+  design     DesignUpload? @relation(fields: [designId], references: [id])
+
+  @@index([orderId])
+}

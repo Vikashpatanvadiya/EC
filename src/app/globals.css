@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+/* ============================================================
+   EXQUISITE CRAFT
+   Tokens lifted directly from the reference design: colours are
+   its exact computed values, type is its measured scale
+   (1440px desktop → 800px tablet, interpolated with clamp).
+   ============================================================ */
+
+@theme {
+  --color-cream: #fffdf5;
+  --color-lime: #d6ef78;
+  --color-ink: #17231c;
+  --color-blue: #244be8;
+  --color-yellow: #f9e88d;
+  --color-pink: #f8bbd1;
+
+  --color-background: var(--color-cream);
+  --color-foreground: var(--color-ink);
+
+  --font-display: var(--font-clash), "Clash Display", system-ui, sans-serif;
+
+  /* Measured: 100px @1440, 64px @800 */
+  --text-h1: clamp(3rem, 0.86rem + 5.63vw, 6.25rem);
+  /* Measured: 56px @1440, 40px @800 */
+  --text-h2: clamp(2rem, 1.25rem + 1.88vw, 3.5rem);
+  --text-h3: clamp(1.25rem, 1.05rem + 0.5vw, 1.5625rem);
+  --text-body: 1.125rem;
+  --text-micro: 0.8125rem;
+
+  --container: 69rem; /* 1104px — matches the reference grid */
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-display);
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1 {
+    font-size: var(--text-h1);
+    font-weight: 600;
+    line-height: 0.95;
+    letter-spacing: -0.055em;
+  }
+
+  h2 {
+    font-size: var(--text-h2);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  h3 {
+    font-size: var(--text-h3);
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    letter-spacing: -0.02em;
+  }
+
+  :focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background-color: var(--color-lime);
+    color: var(--color-ink);
+  }
+}
+
+@layer components {
+  .shell {
+    width: 100%;
+    max-width: var(--container);
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+  }
+
+  /* 13px / 500 / uppercase — the reference's eyebrow + nav label */
+  .micro {
+    font-size: var(--text-micro);
+    font-weight: 500;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+  }
+
+  .lede {
+    font-size: var(--text-body);
+    font-weight: 400;
+    line-height: 1.5;
+    letter-spacing: -0.02em;
+  }
+
+  /* Dark pill CTA */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 1.25rem;
+    min-height: 3rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 999px;
+    background-color: var(--color-ink);
+    color: var(--color-cream);
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .pill:hover {
+    transform: translateY(-2px);
+  }
+
+  .pill--light {
+    background-color: var(--color-cream);
+    color: var(--color-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .pill:hover {
+    transform: none;
+  }
+}
