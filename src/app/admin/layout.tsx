@@ -25,7 +25,7 @@ export default async function AdminLayout({
       <header className="bg-ink text-cream">
         {/* Two rows on phones so nothing wraps mid-word; one row from sm up. */}
         <div className="shell flex flex-col gap-3 py-3 sm:h-[72px] sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:py-0">
-          <div className="flex items-center justify-between gap-6 sm:justify-start sm:gap-8">
+          <div className="flex items-center justify-between gap-6 sm:-order-2 sm:justify-start sm:gap-8">
             <Link
               href="/admin"
               className="whitespace-nowrap font-medium tracking-[-0.02em] text-lime"
@@ -49,7 +49,7 @@ export default async function AdminLayout({
 
           <nav
             aria-label="Admin"
-            className="flex items-center gap-6 sm:order-first sm:ml-2"
+            className="flex items-center gap-6 sm:-order-1 sm:mr-auto"
           >
             {TABS.map((t) => (
               <Link
